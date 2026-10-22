@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'vistas/vista_login.dart';
+import 'vistas/vista_registro.dart';
 import 'vistas/vista_anuncios.dart';
 import 'vistas/vista_chat.dart';
 import 'vistas/vista_calendario.dart';
+import 'vistas/vista_perfil.dart';
 
 void main() {
   runApp(const QuickMatchApp());
@@ -10,16 +13,21 @@ void main() {
 class QuickMatchApp extends StatelessWidget {
   const QuickMatchApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'QuickMatch',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const MainNavigator(),
+      initialRoute: '/login',
+      routes: {
+        '/login': (context) => const VistaLogin(),
+        '/registro': (context) => const VistaRegistro(),
+        '/home': (context) => const MainNavigator(),
+      },
     );
   }
 }
@@ -35,7 +43,10 @@ class _MainNavigatorState extends State<MainNavigator> {
   int _currentIndex = 0;
 
   final List<Widget> _vistas = const [
-    VistaCalendario(),VistaChat(), VistaAnuncios(),
+    VistaCalendario(),
+    VistaChat(),
+    VistaAnuncios(),
+    VistaPerfil(),
   ];
 
   @override
@@ -65,6 +76,10 @@ class _MainNavigatorState extends State<MainNavigator> {
           NavigationDestination(
             icon: Icon(Icons.feed),
             label: 'Feed',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person),
+            label: 'Perfil',
           ),
         ],
       ),
