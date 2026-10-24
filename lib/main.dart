@@ -6,7 +6,12 @@ import 'vistas/vista_chat.dart';
 import 'vistas/vista_calendario.dart';
 import 'vistas/vista_perfil.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'TU_SUPABASE_URL',
+    anonKey: 'TU_SUPABASE_ANON_KEY',
+  );
   runApp(const QuickMatchApp());
 }
 
