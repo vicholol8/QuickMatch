@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../servicios/auth_service.dart';
+import '../utils/validadores.dart';
 
 class VistaLogin extends StatefulWidget {
   const VistaLogin({super.key});
@@ -8,19 +10,31 @@ class VistaLogin extends StatefulWidget {
 }
 
 class _VistaLoginState extends State<VistaLogin> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _auth = AuthService();
 
-  void _iniciarSesion() {
-    final email = _emailController.text;
-    final password = _passwordController.text;
+  bool _cargando = false;
+  bool _verPassword = false;
 
-    if (email.isNotEmpty && password.isNotEmpty) {
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor completa todos los campos')),
+  Future<void> _iniciarSesion() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _cargando = true);
+    try {
+      await _auth.iniciarSesion(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
+      // No hace falta navegar: AuthGate detecta la sesión y cambia de pantalla
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mensajeDeError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
@@ -38,71 +52,93 @@ class _VistaLoginState extends State<VistaLogin> {
         padding: const EdgeInsets.all(24.0),
         child: Center(
           child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.lock_outline,
-                  size: 80,
-                  color: Colors.green,
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Iniciar Sesión',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.sports_soccer,
+                    size: 80,
+                    color: Colors.green,
                   ),
-                ),
-                const SizedBox(height: 30),
-                // Campo de Correo Electrónico
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Correo electrónico',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Campo de Contraseña (AQUÍ ESTABA EL CAMPO FALTANTE)
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Contraseña',
-                    prefixIcon: Icon(Icons.lock_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Botón de Ingresar
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _iniciarSesion,
-                    child: const Text(
-                      'Ingresar',
-                      style: TextStyle(fontSize: 18),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'QuickMatch',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                // Opción para ir al registro
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('¿No tienes una cuenta?'),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/registro');
-                      },
-                      child: const Text('Regístrate aquí'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Arma tu partido en un par de minutos',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 30),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    validator: validarEmail,
+                    decoration: const InputDecoration(
+                      labelText: 'Correo electrónico',
+                      prefixIcon: Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: !_verPassword,
+                    validator: validarPassword,
+                    onFieldSubmitted: (_) => _iniciarSesion(),
+                    decoration: InputDecoration(
+                      labelText: 'Contraseña',
+                      prefixIcon: const Icon(Icons.lock_outlined),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(_verPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility),
+                        onPressed: () =>
+                            setState(() => _verPassword = !_verPassword),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _cargando ? null : _iniciarSesion,
+                      child: _cargando
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Ingresar',
+                              style: TextStyle(fontSize: 18),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('¿No tienes una cuenta?'),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/registro');
+                        },
+                        child: const Text('Regístrate aquí'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

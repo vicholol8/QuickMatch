@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/favoritos_provider.dart';
+import '../providers/partidos_provider.dart';
+import '../servicios/auth_service.dart';
+import '../utils/validadores.dart';
 
 class VistaPerfil extends StatefulWidget {
   const VistaPerfil({super.key});
@@ -8,36 +14,46 @@ class VistaPerfil extends StatefulWidget {
 }
 
 class _VistaPerfilState extends State<VistaPerfil> {
-  // Datos del perfil
-  String _nombre = 'Usuario QuickMatch';
-  String _email = 'usuario@ejemplo.com';
-  String _bio = '¡Hola! Estoy usando QuickMatch.';
+  final _auth = AuthService();
 
-  // Icono o imagen actual del avatar
-  IconData _iconoPerfil = Icons.person;
+  // Avatares disponibles; en Supabase se guarda solo la posición
+  static const List<(IconData, Color)> _avatares = [
+    (Icons.person, Colors.green),
+    (Icons.face, Colors.blue),
+    (Icons.sports_soccer, Colors.orange),
+    (Icons.pets, Colors.purple),
+    (Icons.star, Colors.amber),
+  ];
 
-  // Controladores para el diálogo de texto
-  late TextEditingController _nombreController;
-  late TextEditingController _emailController;
-  late TextEditingController _bioController;
+  User? get _usuario => Supabase.instance.client.auth.currentUser;
+  Map<String, dynamic> get _datos => _usuario?.userMetadata ?? {};
 
-  @override
-  void initState() {
-    super.initState();
-    _nombreController = TextEditingController(text: _nombre);
-    _emailController = TextEditingController(text: _email);
-    _bioController = TextEditingController(text: _bio);
+  String get _nombre {
+    final n = _datos['nombre'] as String?;
+    return (n == null || n.isEmpty) ? 'Jugador QuickMatch' : n;
   }
 
-  @override
-  void dispose() {
-    _nombreController.dispose();
-    _emailController.dispose();
-    _bioController.dispose();
-    super.dispose();
+  String get _bio {
+    final b = _datos['bio'] as String?;
+    return (b == null || b.isEmpty) ? '¡Hola! Estoy usando QuickMatch.' : b;
   }
 
-  // Diálogo exclusivo para cambiar la foto/icono de perfil
+  int get _avatar {
+    final a = _datos['avatar'];
+    return (a is int && a >= 0 && a < _avatares.length) ? a : 0;
+  }
+
+  Future<void> _guardarEnPerfil(Map<String, dynamic> cambios, String ok) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _auth.actualizarPerfil(cambios);
+      if (mounted) setState(() {});
+      messenger.showSnackBar(SnackBar(content: Text(ok)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+    }
+  }
+
   void _mostrarSelectorDeFoto() {
     showDialog(
       context: context,
@@ -49,11 +65,19 @@ class _VistaPerfilState extends State<VistaPerfil> {
             runSpacing: 16,
             alignment: WrapAlignment.center,
             children: [
-              _opcionAvatar(Icons.person, Colors.green),
-              _opcionAvatar(Icons.face, Colors.blue),
-              _opcionAvatar(Icons.sports_soccer, Colors.orange),
-              _opcionAvatar(Icons.pets, Colors.purple),
-              _opcionAvatar(Icons.star, Colors.amber),
+              for (var i = 0; i < _avatares.length; i++)
+                InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    Navigator.pop(dialogContext);
+                    _guardarEnPerfil({'avatar': i}, 'Foto de perfil actualizada');
+                  },
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: _avatares[i].$2,
+                    child: Icon(_avatares[i].$1, size: 32, color: Colors.white),
+                  ),
+                ),
             ],
           ),
           actions: [
@@ -67,30 +91,10 @@ class _VistaPerfilState extends State<VistaPerfil> {
     );
   }
 
-  Widget _opcionAvatar(IconData icono, Color color) {
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _iconoPerfil = icono;
-        });
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Foto de perfil actualizada')),
-        );
-      },
-      child: CircleAvatar(
-        radius: 28,
-        backgroundColor: color,
-        child: Icon(icono, size: 32, color: Colors.white),
-      ),
-    );
-  }
-
-  // Diálogo para editar solo los textos (nombre, correo, biografía)
   void _mostrarDialogoEditarTexto() {
-    _nombreController.text = _nombre;
-    _emailController.text = _email;
-    _bioController.text = _bio;
+    final formKey = GlobalKey<FormState>();
+    final nombreController = TextEditingController(text: _datos['nombre'] ?? '');
+    final bioController = TextEditingController(text: _datos['bio'] ?? '');
 
     showDialog(
       context: context,
@@ -98,34 +102,35 @@ class _VistaPerfilState extends State<VistaPerfil> {
         return AlertDialog(
           title: const Text('Editar Información'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _nombreController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre completo',
-                    prefixIcon: Icon(Icons.person),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nombreController,
+                    textCapitalization: TextCapitalization.words,
+                    validator: validarObligatorio('tu nombre', minimo: 2),
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre completo',
+                      prefixIcon: Icon(Icons.person),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Correo electrónico',
-                    prefixIcon: Icon(Icons.email),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: bioController,
+                    maxLines: 2,
+                    maxLength: 120,
+                    validator: (valor) => (valor?.length ?? 0) > 120
+                        ? 'Máximo 120 caracteres'
+                        : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Descripción / Biografía',
+                      prefixIcon: Icon(Icons.info_outline),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _bioController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Descripción / Biografía',
-                    prefixIcon: Icon(Icons.info_outline),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           actions: [
@@ -135,14 +140,14 @@ class _VistaPerfilState extends State<VistaPerfil> {
             ),
             ElevatedButton(
               onPressed: () {
-                setState(() {
-                  _nombre = _nombreController.text;
-                  _email = _emailController.text;
-                  _bio = _bioController.text;
-                });
+                if (!formKey.currentState!.validate()) return;
                 Navigator.pop(dialogContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Información actualizada')),
+                _guardarEnPerfil(
+                  {
+                    'nombre': nombreController.text.trim(),
+                    'bio': bioController.text.trim(),
+                  },
+                  'Información actualizada',
                 );
               },
               child: const Text('Guardar'),
@@ -153,8 +158,21 @@ class _VistaPerfilState extends State<VistaPerfil> {
     );
   }
 
+  Future<void> _cerrarSesion() async {
+    final partidos = context.read<PartidosProvider>();
+    final favoritos = context.read<FavoritosProvider>();
+    await _auth.cerrarSesion();
+    partidos.limpiar();
+    favoritos.limpiar();
+    // AuthGate vuelve solo al login
+  }
+
   @override
   Widget build(BuildContext context) {
+    final (icono, color) = _avatares[_avatar];
+    final partidos = context.watch<PartidosProvider>();
+    final favoritos = context.watch<FavoritosProvider>();
+
     return Scaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -163,10 +181,21 @@ class _VistaPerfilState extends State<VistaPerfil> {
             const SizedBox(height: 20),
             Stack(
               children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.green,
-                  child: Icon(_iconoPerfil, size: 60, color: Colors.white),
+                // Al cambiar de avatar el color y el borde cambian con animación
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: color.withValues(alpha: 0.35),
+                      width: 6,
+                    ),
+                  ),
+                  child: Icon(icono, size: 56, color: Colors.white),
                 ),
                 Positioned(
                   bottom: 0,
@@ -175,10 +204,11 @@ class _VistaPerfilState extends State<VistaPerfil> {
                     radius: 18,
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     child: IconButton(
-                      icon: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                      icon: const Icon(Icons.camera_alt,
+                          size: 18, color: Colors.white),
                       tooltip: 'Cambiar foto',
                       padding: EdgeInsets.zero,
-                      onPressed: _mostrarSelectorDeFoto, // Abre la selección de foto
+                      onPressed: _mostrarSelectorDeFoto,
                     ),
                   ),
                 ),
@@ -191,7 +221,7 @@ class _VistaPerfilState extends State<VistaPerfil> {
             ),
             const SizedBox(height: 4),
             Text(
-              _email,
+              _usuario?.email ?? '',
               style: const TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 8),
@@ -200,27 +230,80 @@ class _VistaPerfilState extends State<VistaPerfil> {
               textAlign: TextAlign.center,
               style: const TextStyle(fontStyle: FontStyle.italic),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                _Estadistica(
+                  valor: '${partidos.partidos.length}',
+                  etiqueta: 'Partidos',
+                ),
+                _Estadistica(
+                  valor: '${partidos.proximos}',
+                  etiqueta: 'Próximos',
+                ),
+                _Estadistica(
+                  valor: '${favoritos.cantidad}',
+                  etiqueta: 'Deportes fav.',
+                ),
+              ],
+            ),
+            if (favoritos.cantidad > 0) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final d in favoritos.favoritos)
+                    Chip(
+                      label: Text(d),
+                      avatar: const Icon(Icons.favorite,
+                          size: 16, color: Colors.red),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.edit_note),
               title: const Text('Editar Datos Personales'),
-              onTap: _mostrarDialogoEditarTexto, // Abre la edición de textos
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Configuración'),
-              onTap: () {},
+              onTap: _mostrarDialogoEditarTexto,
             ),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pushReplacementNamed(context, '/login');
-              },
+              title: const Text('Cerrar Sesión',
+                  style: TextStyle(color: Colors.red)),
+              onTap: _cerrarSesion,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Estadistica extends StatelessWidget {
+  final String valor;
+  final String etiqueta;
+
+  const _Estadistica({required this.valor, required this.etiqueta});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            valor,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          Text(etiqueta, style: const TextStyle(color: Colors.grey)),
+        ],
       ),
     );
   }

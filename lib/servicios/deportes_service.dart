@@ -1,8 +1,13 @@
 import 'package:dio/dio.dart';
-import '../modelo/deporte.dart';
+import '../modelos/deporte.dart';
 
 class DeportesService {
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 15),
+    ),
+  );
 
   Future<List<Deporte>> obtenerDeportes() async {
     final response = await _dio.get(

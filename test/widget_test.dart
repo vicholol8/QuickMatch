@@ -1,30 +1,87 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:quickmatch/main.dart';
+import 'package:quickmatch/modelos/deporte.dart';
+import 'package:quickmatch/modelos/partido.dart';
+import 'package:quickmatch/providers/favoritos_provider.dart';
+import 'package:quickmatch/utils/validadores.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Validadores', () {
+    test('email', () {
+      expect(validarEmail(''), isNotNull);
+      expect(validarEmail('hola'), isNotNull);
+      expect(validarEmail('jugador@udd.cl'), isNull);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('contraseña', () {
+      expect(validarPassword(''), isNotNull);
+      expect(validarPassword('123'), isNotNull);
+      expect(validarPassword('123456'), isNull);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    test('campo obligatorio con mínimo', () {
+      final validar = validarObligatorio('el lugar', minimo: 3);
+      expect(validar('  '), isNotNull);
+      expect(validar('ab'), isNotNull);
+      expect(validar('Cancha 1'), isNull);
+    });
+  });
+
+  test('Partido ida y vuelta desde Supabase', () {
+    final original = Partido(
+      deporte: 'Fútbol',
+      lugar: 'Cancha Central',
+      fecha: DateTime(2026, 11, 3, 19, 30),
+      cupos: 2,
+    );
+    final mapa = original.toMap()..['id'] = 7;
+    final leido = Partido.fromMap(mapa);
+
+    expect(leido.id, 7);
+    expect(leido.deporte, 'Fútbol');
+    expect(leido.fecha, original.fecha);
+    expect(leido.hora, '19:30');
+  });
+
+  test('Deporte desde la API', () {
+    final d = Deporte.fromJson({
+      'idSport': '102',
+      'strSport': 'Soccer',
+      'strFormat': 'TeamvsTeam',
+    });
+    expect(d.nombre, 'Soccer');
+    expect(d.formatoLegible, 'Equipo contra equipo');
+    expect(d.imagen, '');
+  });
+
+  test('FavoritosProvider avisa a quien escucha', () {
+    final favoritos = FavoritosProvider();
+    var avisos = 0;
+    favoritos.addListener(() => avisos++);
+
+    favoritos.alternar('Soccer');
+    expect(favoritos.esFavorito('Soccer'), isTrue);
+
+    favoritos.alternar('Soccer');
+    expect(favoritos.esFavorito('Soccer'), isFalse);
+    expect(avisos, 2);
+  });
+
+  testWidgets('El formulario de registro valida antes de enviar',
+      (tester) async {
+    final formKey = GlobalKey<FormState>();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Form(
+          key: formKey,
+          child: TextFormField(validator: validarEmail),
+        ),
+      ),
+    ));
+
+    expect(formKey.currentState!.validate(), isFalse);
     await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Ingresa tu correo'), findsOneWidget);
   });
 }
