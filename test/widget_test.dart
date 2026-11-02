@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quickmatch/modelos/deporte.dart';
 import 'package:quickmatch/modelos/partido.dart';
 import 'package:quickmatch/providers/favoritos_provider.dart';
+import 'package:quickmatch/servicios/deportes_respaldo.dart';
+import 'package:quickmatch/servicios/deportes_service.dart';
 import 'package:quickmatch/utils/validadores.dart';
 
 void main() {
@@ -55,6 +57,16 @@ void main() {
     expect(d.imagen, '');
   });
 
+  test('El respaldo completa los deportes sin repetir los de la API', () {
+    final deApi = [
+      Deporte.fromJson({'idSport': '102', 'strSport': 'Soccer'}),
+    ];
+    final todos = completarConRespaldo(deApi);
+    expect(todos.first.id, '102');
+    expect(todos.where((d) => d.nombre == 'Soccer').length, 1);
+    expect(todos.length, deportesRespaldo.length);
+  });
+
   test('FavoritosProvider avisa a quien escucha', () {
     final favoritos = FavoritosProvider();
     var avisos = 0;
@@ -68,17 +80,20 @@ void main() {
     expect(avisos, 2);
   });
 
-  testWidgets('El formulario de registro valida antes de enviar',
-      (tester) async {
+  testWidgets('El formulario de registro valida antes de enviar', (
+    tester,
+  ) async {
     final formKey = GlobalKey<FormState>();
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: Form(
-          key: formKey,
-          child: TextFormField(validator: validarEmail),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Form(
+            key: formKey,
+            child: TextFormField(validator: validarEmail),
+          ),
         ),
       ),
-    ));
+    );
 
     expect(formKey.currentState!.validate(), isFalse);
     await tester.pump();
