@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 import '../modelos/anuncio.dart';
+import '../providers/partidos_provider.dart';
 import '../servicios/anuncios_service.dart';
 import '../servicios/auth_service.dart';
+import '../utils/fechas.dart';
 import '../utils/validadores.dart';
+import 'feed_partido.dart';
+import 'hoja_comentarios.dart';
 
 class VistaAnuncios extends StatefulWidget {
   const VistaAnuncios({super.key});
@@ -39,11 +44,22 @@ class _VistaAnunciosState extends State<VistaAnuncios> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _FormularioAnuncio(
-        anuncio: anuncio,
-        onGuardado: _recargar,
-      ),
+      builder: (_) =>
+          _FormularioAnuncio(anuncio: anuncio, onGuardado: _recargar),
     );
+  }
+
+  Future<void> _abrirComentarios(Anuncio anuncio) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => HojaComentarios(anuncio: anuncio),
+    );
+    // Al cerrar se actualiza el contador de comentarios
+    await _recargar();
   }
 
   Future<void> _borrar(Anuncio anuncio) async {
@@ -119,8 +135,7 @@ class _VistaAnunciosState extends State<VistaAnuncios> {
                 : ListView.builder(
                     itemCount: anuncios.length,
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
-                    itemBuilder: (context, index) =>
-                        _tarjeta(anuncios[index]),
+                    itemBuilder: (context, index) => _tarjeta(anuncios[index]),
                   ),
           );
         },
@@ -140,7 +155,7 @@ class _VistaAnunciosState extends State<VistaAnuncios> {
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 4, 16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 4, 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -186,15 +201,32 @@ class _VistaAnunciosState extends State<VistaAnuncios> {
                   Text(
                     anuncio.titulo,
                     style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     anuncio.descripcion,
                     style: const TextStyle(fontSize: 14),
                   ),
+                  if (anuncio.partido != null)
+                    TarjetaPartidoFeed(
+                      partido: anuncio.partido!,
+                      onCambio: _recargar,
+                    ),
                 ],
               ),
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: () => _abrirComentarios(anuncio),
+              icon: const Icon(Icons.chat_bubble_outline, size: 18),
+              label: Text(switch (anuncio.totalComentarios) {
+                0 => 'Comentar',
+                1 => '1 comentario',
+                final n => '$n comentarios',
+              }),
             ),
           ],
         ),
@@ -218,14 +250,16 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
   final _service = AnunciosService();
   late final TextEditingController _tituloController;
   late final TextEditingController _descripcionController;
+  late int? _partidoId = widget.anuncio?.partidoId;
   bool _guardando = false;
 
   @override
   void initState() {
     super.initState();
     _tituloController = TextEditingController(text: widget.anuncio?.titulo);
-    _descripcionController =
-        TextEditingController(text: widget.anuncio?.descripcion);
+    _descripcionController = TextEditingController(
+      text: widget.anuncio?.descripcion,
+    );
   }
 
   @override
@@ -238,14 +272,12 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final usuario = Supabase.instance.client.auth.currentUser;
-    final nombre = usuario?.userMetadata?['nombre'] as String?;
     final anuncio = Anuncio(
       id: widget.anuncio?.id,
-      autor: widget.anuncio?.autor ??
-          (nombre?.isNotEmpty == true ? nombre! : usuario?.email ?? 'Anónimo'),
+      autor: widget.anuncio?.autor ?? nombreDelUsuario(),
       titulo: _tituloController.text.trim(),
       descripcion: _descripcionController.text.trim(),
+      partidoId: _partidoId,
     );
 
     setState(() => _guardando = true);
@@ -261,9 +293,11 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
       await widget.onGuardado();
       messenger.showSnackBar(
         SnackBar(
-          content: Text(widget.anuncio == null
-              ? '¡Anuncio publicado!'
-              : 'Anuncio actualizado'),
+          content: Text(
+            widget.anuncio == null
+                ? '¡Anuncio publicado!'
+                : 'Anuncio actualizado',
+          ),
         ),
       );
     } catch (e) {
@@ -315,6 +349,8 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 8),
+            _selectorPartido(),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -322,7 +358,9 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
               child: ElevatedButton(
                 onPressed: _guardando ? null : _guardar,
                 child: Text(
-                  widget.anuncio == null ? 'Publicar Anuncio' : 'Guardar cambios',
+                  widget.anuncio == null
+                      ? 'Publicar Anuncio'
+                      : 'Guardar cambios',
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
@@ -330,6 +368,41 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
           ],
         ),
       ),
+    );
+  }
+
+  // Solo se pueden invitar partidos propios que todavía no se juegan
+  Widget _selectorPartido() {
+    final ahora = DateTime.now();
+    final partidos = context
+        .watch<PartidosProvider>()
+        .partidos
+        .where((p) => p.fecha.isAfter(ahora) || p.id == _partidoId)
+        .toList();
+
+    return DropdownButtonFormField<int?>(
+      initialValue: partidos.any((p) => p.id == _partidoId) ? _partidoId : null,
+      isExpanded: true,
+      onChanged: (id) => setState(() => _partidoId = id),
+      decoration: InputDecoration(
+        labelText: 'Invitar a un partido (opcional)',
+        prefixIcon: const Icon(Icons.event_available),
+        border: const OutlineInputBorder(),
+        helperText: partidos.isEmpty
+            ? 'Crea un partido en el calendario para poder invitar'
+            : 'Los demás podrán verlo y sumarse',
+      ),
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Sin partido')),
+        for (final p in partidos)
+          DropdownMenuItem(
+            value: p.id,
+            child: Text(
+              '${p.deporte} · ${fechaCorta(p.fecha)}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
     );
   }
 }

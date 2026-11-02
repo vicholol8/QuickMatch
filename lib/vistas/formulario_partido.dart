@@ -145,6 +145,7 @@ class _FormularioPartidoState extends State<FormularioPartido> {
       fecha: _fecha!,
       cupos: int.parse(_cuposController.text.trim()),
       notas: notas.isEmpty ? null : notas,
+      asistentes: widget.partido?.asistentes ?? const [],
     );
 
     setState(() => _guardando = true);
@@ -288,6 +289,10 @@ class _FormularioPartidoState extends State<FormularioPartido> {
                 final n = int.tryParse(valor?.trim() ?? '');
                 if (n == null) return 'Ingresa un número';
                 if (n < 1) return 'Tiene que faltar al menos 1';
+                final sumados = widget.partido?.asistentes.length ?? 0;
+                if (n < sumados) {
+                  return 'Ya se sumaron $sumados, no puede ser menos';
+                }
                 if (n > _maximoFaltantes) {
                   return _modalidad == null
                       ? 'Debe ser entre 1 y $_maximoFaltantes'

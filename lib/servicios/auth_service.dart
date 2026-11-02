@@ -29,6 +29,14 @@ class AuthService {
   }
 }
 
+// Nombre con el que el usuario aparece en el feed, comentarios y partidos
+String nombreDelUsuario() {
+  final usuario = Supabase.instance.client.auth.currentUser;
+  final nombre = usuario?.userMetadata?['nombre'] as String?;
+  if (nombre != null && nombre.isNotEmpty) return nombre;
+  return usuario?.email ?? 'Anónimo';
+}
+
 // Supabase responde en inglés; traducimos los casos más comunes
 String mensajeDeError(Object error) {
   if (error is AuthException) {

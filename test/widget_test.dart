@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:quickmatch/modelos/anuncio.dart';
 import 'package:quickmatch/modelos/deporte.dart';
 import 'package:quickmatch/modelos/partido.dart';
 import 'package:quickmatch/modelos/reglas_deporte.dart';
@@ -8,6 +9,7 @@ import 'package:quickmatch/providers/favoritos_provider.dart';
 import 'package:quickmatch/servicios/deportes_respaldo.dart';
 import 'package:quickmatch/servicios/deportes_service.dart';
 import 'package:quickmatch/utils/validadores.dart';
+import 'package:quickmatch/vistas/vista_chat.dart';
 
 void main() {
   group('Validadores', () {
@@ -96,6 +98,70 @@ void main() {
         }
       }
     });
+  });
+
+  test('Anuncio con partido vinculado, asistentes y comentarios', () {
+    final anuncio = Anuncio.fromMap({
+      'id': 1,
+      'autor': 'Diego Muñoz',
+      'titulo': 'Falta arquero',
+      'descripcion': 'Baby fútbol en Providencia',
+      'partido_id': 9,
+      'partido': {
+        'id': 9,
+        'user_id': 'diego',
+        'deporte': 'Baby fútbol',
+        'lugar': 'Club Providencia',
+        'fecha': '2026-11-03T00:00:00Z',
+        'cupos': 3,
+        'asistentes': [
+          {'user_id': 'cami', 'nombre': 'Camila Rojas'},
+        ],
+      },
+      'comentarios': [
+        {'count': 4},
+      ],
+    });
+    expect(anuncio.totalComentarios, 4);
+    expect(anuncio.partido!.faltan, 2);
+    expect(anuncio.partido!.sumado('cami'), isTrue);
+    expect(anuncio.partido!.sumado('diego'), isFalse);
+    expect(anuncio.toMap()['partido_id'], 9);
+  });
+
+  test('Un partido sin cupos libres queda completo', () {
+    final p = Partido.fromMap({
+      'deporte': 'Tenis single',
+      'lugar': 'Club',
+      'fecha': '2026-11-03T00:00:00Z',
+      'cupos': 1,
+      'asistentes': [
+        {'user_id': 'vale', 'nombre': 'Valentina Soto'},
+      ],
+    });
+    expect(p.completo, isTrue);
+    expect(p.faltan, 0);
+  });
+
+  test('En un grupo la vista previa dice quién escribió', () {
+    final grupo = ResumenChat(
+      nombre: 'Pichanga',
+      esGrupo: true,
+      participantes: ['Tomás Lagos'],
+      mensajes: [const Mensaje('Tomás Lagos', 'Voy fijo', '10:00')],
+    );
+    expect(grupo.vistaPrevia, 'Tomás: Voy fijo');
+
+    final directo = ResumenChat(
+      nombre: 'Tomás Lagos',
+      esGrupo: false,
+      participantes: ['Tomás Lagos'],
+      mensajes: [const Mensaje('Tomás Lagos', 'Voy fijo', '10:00')],
+    );
+    expect(directo.vistaPrevia, 'Voy fijo');
+
+    directo.mensajes.add(const Mensaje(null, 'Dale', '10:01'));
+    expect(directo.vistaPrevia, 'Tú: Dale');
   });
 
   test('FavoritosProvider avisa a quien escucha', () {

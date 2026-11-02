@@ -1,3 +1,6 @@
+import '../utils/fechas.dart' as fechas;
+import 'partido.dart';
+
 class Anuncio {
   final int? id;
   final String? userId;
@@ -5,6 +8,9 @@ class Anuncio {
   final String titulo;
   final String descripcion;
   final DateTime? creado;
+  final int? partidoId;
+  final Partido? partido;
+  final int totalComentarios;
 
   Anuncio({
     this.id,
@@ -13,6 +19,9 @@ class Anuncio {
     required this.titulo,
     required this.descripcion,
     this.creado,
+    this.partidoId,
+    this.partido,
+    this.totalComentarios = 0,
   });
 
   factory Anuncio.fromMap(Map<String, dynamic> map) {
@@ -25,6 +34,11 @@ class Anuncio {
       creado: map['created_at'] != null
           ? DateTime.parse(map['created_at']).toLocal()
           : null,
+      partidoId: map['partido_id'] as int?,
+      partido: map['partido'] != null ? Partido.fromMap(map['partido']) : null,
+      // PostgREST devuelve el conteo como [{count: n}]
+      totalComentarios:
+          (map['comentarios'] as List?)?.firstOrNull?['count'] ?? 0,
     );
   }
 
@@ -33,16 +47,9 @@ class Anuncio {
       'autor': autor,
       'titulo': titulo,
       'descripcion': descripcion,
+      'partido_id': partidoId,
     };
   }
 
-  String get haceCuanto {
-    if (creado == null) return '';
-    final diferencia = DateTime.now().difference(creado!);
-    if (diferencia.inMinutes < 1) return 'Justo ahora';
-    if (diferencia.inHours < 1) return 'Hace ${diferencia.inMinutes} min';
-    if (diferencia.inDays < 1) return 'Hace ${diferencia.inHours} h';
-    if (diferencia.inDays == 1) return 'Ayer';
-    return 'Hace ${diferencia.inDays} días';
-  }
+  String get haceCuanto => fechas.haceCuanto(creado);
 }

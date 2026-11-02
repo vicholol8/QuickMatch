@@ -23,10 +23,8 @@ class _VistaCalendarioState extends State<VistaCalendario> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => FormularioPartido(
-          partido: partido,
-          diaInicial: _selectedDay,
-        ),
+        builder: (_) =>
+            FormularioPartido(partido: partido, diaInicial: _selectedDay),
       ),
     );
   }
@@ -36,7 +34,9 @@ class _VistaCalendarioState extends State<VistaCalendario> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Borrar partido'),
-        content: Text('¿Seguro que quieres borrar ${partido.deporte} en ${partido.lugar}?'),
+        content: Text(
+          '¿Seguro que quieres borrar ${partido.deporte} en ${partido.lugar}?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -153,7 +153,12 @@ class _VistaCalendarioState extends State<VistaCalendario> {
               title: Text('${partido.deporte} · ${partido.lugar}'),
               subtitle: Text(
                 '${partido.hora} hrs · '
-                '${partido.cupos == 1 ? 'Falta 1 jugador' : 'Faltan ${partido.cupos} jugadores'}'
+                '${partido.completo
+                    ? '¡Completo!'
+                    : partido.faltan == 1
+                    ? 'Falta 1 jugador'
+                    : 'Faltan ${partido.faltan} jugadores'}'
+                '${partido.asistentes.isNotEmpty ? ' · se sumaron: ${partido.asistentes.map((a) => a.nombre).join(', ')}' : ''}'
                 '${partido.notas != null ? '\n${partido.notas}' : ''}',
               ),
               isThreeLine: partido.notas != null,
