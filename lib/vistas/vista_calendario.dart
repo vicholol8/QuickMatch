@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../modelos/partido.dart';
+import '../modelos/reglas_deporte.dart';
 import '../providers/partidos_provider.dart';
 import '../servicios/auth_service.dart';
 import 'formulario_partido.dart';
@@ -145,7 +146,10 @@ class _VistaCalendarioState extends State<VistaCalendario> {
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: ListTile(
-              leading: const Icon(Icons.sports_soccer, color: Colors.green),
+              leading: Icon(
+                buscarModalidad(partido.deporte).$1.icono,
+                color: Colors.green,
+              ),
               title: Text('${partido.deporte} · ${partido.lugar}'),
               subtitle: Text(
                 '${partido.hora} hrs · '

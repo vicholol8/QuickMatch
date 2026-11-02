@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:quickmatch/modelos/deporte.dart';
 import 'package:quickmatch/modelos/partido.dart';
+import 'package:quickmatch/modelos/reglas_deporte.dart';
 import 'package:quickmatch/providers/favoritos_provider.dart';
 import 'package:quickmatch/servicios/deportes_respaldo.dart';
 import 'package:quickmatch/servicios/deportes_service.dart';
@@ -52,7 +53,7 @@ void main() {
       'strSport': 'Soccer',
       'strFormat': 'TeamvsTeam',
     });
-    expect(d.nombre, 'Soccer');
+    expect(d.nombre, 'Fútbol');
     expect(d.formatoLegible, 'Equipo contra equipo');
     expect(d.imagen, '');
   });
@@ -63,8 +64,38 @@ void main() {
     ];
     final todos = completarConRespaldo(deApi);
     expect(todos.first.id, '102');
-    expect(todos.where((d) => d.nombre == 'Soccer').length, 1);
+    expect(todos.where((d) => d.nombre == 'Fútbol').length, 1);
+    expect(todos.first.descripcion, startsWith('Dos equipos'));
     expect(todos.length, deportesRespaldo.length);
+  });
+
+  group('Reglas por deporte', () {
+    test('cada modalidad descuenta al organizador', () {
+      final (_, f7) = buscarModalidad('Fútbol 7');
+      expect(f7!.maximoFaltantes, 13);
+      final (_, single) = buscarModalidad('Tenis single');
+      expect(single!.maximoFaltantes, 1);
+    });
+
+    test('un deporte sin modalidad toma la primera', () {
+      final (deporte, modalidad) = buscarModalidad('básquetbol');
+      expect(deporte.nombre, 'Básquetbol');
+      expect(modalidad!.nombre, 'Básquetbol 5x5');
+    });
+
+    test('lo que no está en el catálogo queda como Otro', () {
+      final (deporte, modalidad) = buscarModalidad('Ultimate');
+      expect(deporte.esOtro, isTrue);
+      expect(modalidad, isNull);
+    });
+
+    test('ninguna modalidad supera el tope de la base de datos', () {
+      for (final d in catalogoDeportes) {
+        for (final m in d.modalidades) {
+          expect(m.maximoFaltantes, inInclusiveRange(1, 50), reason: m.nombre);
+        }
+      }
+    });
   });
 
   test('FavoritosProvider avisa a quien escucha', () {

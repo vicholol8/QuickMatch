@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../modelos/partido.dart';
+import '../modelos/reglas_deporte.dart';
 import '../providers/partidos_provider.dart';
 import '../servicios/auth_service.dart';
 import '../utils/validadores.dart';
@@ -25,25 +26,40 @@ class FormularioPartido extends StatefulWidget {
 
 class _FormularioPartidoState extends State<FormularioPartido> {
   final _formKey = GlobalKey<FormState>();
+  final _cuposKey = GlobalKey<FormFieldState<String>>();
+  // Solo se usa cuando el deporte es "Otro" y se escribe a mano
   late final TextEditingController _deporteController;
   late final TextEditingController _lugarController;
   late final TextEditingController _cuposController;
   late final TextEditingController _notasController;
 
+  ReglasDeporte? _deporte;
+  Modalidad? _modalidad;
   DateTime? _fecha;
   bool _guardando = false;
 
   bool get _esEdicion => widget.partido != null;
 
+  // Para "Otro" no hay reglas, así que vale el tope de la base de datos
+  int get _maximoFaltantes => _modalidad?.maximoFaltantes ?? 50;
+
   @override
   void initState() {
     super.initState();
     final p = widget.partido;
-    _deporteController =
-        TextEditingController(text: p?.deporte ?? widget.deporteInicial ?? '');
+    final texto = p?.deporte ?? widget.deporteInicial;
+    if (texto != null && texto.trim().isNotEmpty) {
+      final (deporte, modalidad) = buscarModalidad(texto);
+      _deporte = deporte;
+      _modalidad = modalidad;
+    }
+    _deporteController = TextEditingController(
+      text: _deporte?.esOtro == true ? texto : '',
+    );
     _lugarController = TextEditingController(text: p?.lugar ?? '');
-    _cuposController =
-        TextEditingController(text: p != null ? '${p.cupos}' : '');
+    _cuposController = TextEditingController(
+      text: p != null ? '${p.cupos}' : '',
+    );
     _notasController = TextEditingController(text: p?.notas ?? '');
 
     if (p != null) {
@@ -63,6 +79,28 @@ class _FormularioPartidoState extends State<FormularioPartido> {
     super.dispose();
   }
 
+  void _elegirDeporte(ReglasDeporte? deporte) {
+    if (deporte == null) return;
+    setState(() {
+      _deporte = deporte;
+      _modalidad = deporte.esOtro ? null : deporte.modalidades.first;
+    });
+    _revalidarCupos();
+  }
+
+  void _elegirModalidad(Modalidad modalidad) {
+    setState(() => _modalidad = modalidad);
+    _revalidarCupos();
+  }
+
+  // Si cambia la modalidad, el tope de cupos cambia y hay que volver a revisar
+  void _revalidarCupos() {
+    if (_cuposController.text.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _cuposKey.currentState?.validate(),
+    );
+  }
+
   Future<void> _elegirFecha(FormFieldState<DateTime> campo) async {
     final ahora = DateTime.now();
     final base = _fecha ?? ahora;
@@ -70,7 +108,9 @@ class _FormularioPartidoState extends State<FormularioPartido> {
     final dia = await showDatePicker(
       context: context,
       initialDate: base.isBefore(ahora) && !_esEdicion ? ahora : base,
-      firstDate: _esEdicion ? DateTime(2024) : DateTime(ahora.year, ahora.month, ahora.day),
+      firstDate: _esEdicion
+          ? DateTime(2024)
+          : DateTime(ahora.year, ahora.month, ahora.day),
       lastDate: DateTime(2030, 12, 31),
     );
     if (dia == null || !mounted) return;
@@ -81,8 +121,13 @@ class _FormularioPartidoState extends State<FormularioPartido> {
     );
     if (hora == null) return;
 
-    final elegida =
-        DateTime(dia.year, dia.month, dia.day, hora.hour, hora.minute);
+    final elegida = DateTime(
+      dia.year,
+      dia.month,
+      dia.day,
+      hora.hour,
+      hora.minute,
+    );
     setState(() => _fecha = elegida);
     campo.didChange(elegida);
   }
@@ -93,7 +138,9 @@ class _FormularioPartidoState extends State<FormularioPartido> {
     final notas = _notasController.text.trim();
     final partido = Partido(
       id: widget.partido?.id,
-      deporte: _deporteController.text.trim(),
+      deporte: _deporte!.esOtro
+          ? _deporteController.text.trim()
+          : _modalidad!.nombre,
       lugar: _lugarController.text.trim(),
       fecha: _fecha!,
       cupos: int.parse(_cuposController.text.trim()),
@@ -143,17 +190,54 @@ class _FormularioPartidoState extends State<FormularioPartido> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            TextFormField(
-              controller: _deporteController,
-              textCapitalization: TextCapitalization.sentences,
-              validator: validarObligatorio('el deporte', minimo: 3),
-              decoration: const InputDecoration(
+            DropdownButtonFormField<ReglasDeporte>(
+              initialValue: _deporte,
+              isExpanded: true,
+              validator: (valor) => valor == null ? 'Elige el deporte' : null,
+              onChanged: _elegirDeporte,
+              decoration: InputDecoration(
                 labelText: 'Deporte',
-                hintText: 'Fútbol, básquetbol, pádel...',
-                prefixIcon: Icon(Icons.sports_soccer),
-                border: OutlineInputBorder(),
+                prefixIcon: Icon(_deporte?.icono ?? Icons.sports),
+                border: const OutlineInputBorder(),
               ),
+              items: [
+                for (final d in catalogoDeportes)
+                  DropdownMenuItem(value: d, child: Text(d.nombre)),
+              ],
             ),
+            if (_deporte?.esOtro == true) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _deporteController,
+                textCapitalization: TextCapitalization.sentences,
+                validator: validarObligatorio('el deporte', minimo: 3),
+                decoration: const InputDecoration(
+                  labelText: '¿Qué deporte?',
+                  hintText: 'Ej: ultimate, bádminton, escalada...',
+                  prefixIcon: Icon(Icons.edit_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+            if (_deporte != null && _deporte!.modalidades.length > 1) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final m in _deporte!.modalidades)
+                    ChoiceChip(
+                      label: Text(m.nombre),
+                      selected: m == _modalidad,
+                      onSelected: (_) => _elegirModalidad(m),
+                    ),
+                ],
+              ),
+            ],
+            if (_modalidad != null) ...[
+              const SizedBox(height: 8),
+              _InfoModalidad(modalidad: _modalidad!),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _lugarController,
@@ -197,18 +281,25 @@ class _FormularioPartidoState extends State<FormularioPartido> {
             ),
             const SizedBox(height: 16),
             TextFormField(
+              key: _cuposKey,
               controller: _cuposController,
               keyboardType: TextInputType.number,
               validator: (valor) {
                 final n = int.tryParse(valor?.trim() ?? '');
                 if (n == null) return 'Ingresa un número';
-                if (n < 1 || n > 50) return 'Debe ser entre 1 y 50';
+                if (n < 1) return 'Tiene que faltar al menos 1';
+                if (n > _maximoFaltantes) {
+                  return _modalidad == null
+                      ? 'Debe ser entre 1 y $_maximoFaltantes'
+                      : 'En ${_modalidad!.nombre} pueden faltar como máximo $_maximoFaltantes';
+                }
                 return null;
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Jugadores que faltan',
-                prefixIcon: Icon(Icons.group_add_outlined),
-                border: OutlineInputBorder(),
+                helperText: 'Entre 1 y $_maximoFaltantes',
+                prefixIcon: const Icon(Icons.group_add_outlined),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
@@ -244,6 +335,38 @@ class _FormularioPartidoState extends State<FormularioPartido> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Explica la modalidad elegida para que los cupos tengan sentido
+class _InfoModalidad extends StatelessWidget {
+  final Modalidad modalidad;
+
+  const _InfoModalidad({required this.modalidad});
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colores.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: colores.onSecondaryContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '${modalidad.resumen}.\n'
+              'Contándote a ti, pueden faltar hasta ${modalidad.maximoFaltantes}.',
+              style: TextStyle(color: colores.onSecondaryContainer),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -25,11 +25,18 @@ class DeportesService {
   }
 }
 
-// Lo que trae la API va primero; el respaldo solo agrega los que faltan
+// Lo que trae la API va primero; el respaldo solo agrega los que faltan.
+// La API describe en inglés, así que se usa la descripción en español si existe.
 List<Deporte> completarConRespaldo(List<Deporte> deApi) {
+  final respaldo = {
+    for (final d in deportesRespaldo) d.nombre.toLowerCase(): d,
+  };
   final nombres = deApi.map((d) => d.nombre.toLowerCase()).toSet();
   return [
-    ...deApi,
+    for (final d in deApi)
+      respaldo[d.nombre.toLowerCase()] != null
+          ? d.conDescripcion(respaldo[d.nombre.toLowerCase()]!.descripcion)
+          : d,
     ...deportesRespaldo.where((d) => !nombres.contains(d.nombre.toLowerCase())),
   ];
 }
