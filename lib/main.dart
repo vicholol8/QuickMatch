@@ -123,6 +123,11 @@ class _MainNavigatorState extends State<MainNavigator> {
           setState(() {
             _currentIndex = index;
           });
+          // Calendario y Chat se refrescan al entrar, por si alguien
+          // se sumó a un partido mío desde otra cuenta
+          if (index == 0 || index == 3) {
+            context.read<PartidosProvider>().cargar();
+          }
         },
         destinations: const [
           NavigationDestination(

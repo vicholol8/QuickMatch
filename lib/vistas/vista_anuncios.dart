@@ -99,7 +99,9 @@ class _VistaAnunciosState extends State<VistaAnuncios> {
       body: FutureBuilder<List<Anuncio>>(
         future: _futuroAnuncios,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          // Al recargar se sigue mostrando la lista anterior en vez del spinner
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {

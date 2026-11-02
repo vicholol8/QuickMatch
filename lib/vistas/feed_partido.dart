@@ -33,6 +33,7 @@ class _TarjetaPartidoFeedState extends State<TarjetaPartidoFeed> {
     final partido = widget.partido;
     final yaEstoy = partido.sumado(_miId);
     final messenger = ScaffoldMessenger.of(context);
+    final partidos = context.read<PartidosProvider>();
 
     setState(() => _ocupado = true);
     try {
@@ -41,8 +42,10 @@ class _TarjetaPartidoFeedState extends State<TarjetaPartidoFeed> {
       } else {
         await _service.sumarme(partido.id!, nombreDelUsuario());
       }
+      // Primero calendario y chats: al recargar el feed esta tarjeta
+      // se reconstruye y ya no se podría usar su context
+      await partidos.cargar();
       await widget.onCambio();
-      if (mounted) await context.read<PartidosProvider>().cargar();
       messenger.showSnackBar(
         SnackBar(
           content: Text(
