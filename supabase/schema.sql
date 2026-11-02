@@ -203,3 +203,83 @@ drop policy if exists "comentarios_delete_propios" on public.comentarios;
 create policy "comentarios_delete_propios" on public.comentarios
   for delete to authenticated
   using (auth.uid() = user_id);
+
+-- =========================================================
+-- Quien se sumó a un partido lo sigue viendo en su calendario,
+-- aunque después se borre el anuncio que lo publicaba.
+-- =========================================================
+create or replace function public.estoy_sumado(pid bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.asistentes
+    where partido_id = pid and user_id = auth.uid()
+  );
+$$;
+
+drop policy if exists "partidos_select_sumados" on public.partidos;
+create policy "partidos_select_sumados" on public.partidos
+  for select to authenticated
+  using (public.estoy_sumado(id));
+
+-- =========================================================
+-- Chat grupal de cada partido: lo leen y escriben solo el
+-- organizador y quienes se sumaron. Los mensajes llegan en vivo.
+-- =========================================================
+create or replace function public.soy_del_partido(pid bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.partidos where id = pid and user_id = auth.uid()
+  ) or exists (
+    select 1 from public.asistentes where partido_id = pid and user_id = auth.uid()
+  );
+$$;
+
+revoke execute on function public.estoy_sumado(bigint) from anon, public;
+revoke execute on function public.soy_del_partido(bigint) from anon, public;
+grant execute on function public.estoy_sumado(bigint) to authenticated;
+grant execute on function public.soy_del_partido(bigint) to authenticated;
+
+create table if not exists public.mensajes (
+  id          bigint generated always as identity primary key,
+  partido_id  bigint not null references public.partidos (id) on delete cascade,
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  autor       text not null check (char_length(autor) between 1 and 60),
+  texto       text not null check (char_length(texto) between 1 and 500),
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists mensajes_partido_id_idx on public.mensajes (partido_id, created_at);
+create index if not exists mensajes_user_id_idx on public.mensajes (user_id);
+
+alter table public.mensajes enable row level security;
+
+drop policy if exists "mensajes_select_miembros" on public.mensajes;
+create policy "mensajes_select_miembros" on public.mensajes
+  for select to authenticated
+  using (public.soy_del_partido(partido_id));
+
+drop policy if exists "mensajes_insert_miembros" on public.mensajes;
+create policy "mensajes_insert_miembros" on public.mensajes
+  for insert to authenticated
+  with check (auth.uid() = user_id and public.soy_del_partido(partido_id));
+
+-- Realtime: avisa a la app cuando llega un mensaje nuevo
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'mensajes'
+  ) then
+    alter publication supabase_realtime add table public.mensajes;
+  end if;
+end $$;

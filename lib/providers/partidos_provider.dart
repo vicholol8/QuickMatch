@@ -8,7 +8,7 @@ class PartidosProvider extends ChangeNotifier {
   final PartidosService _service;
 
   PartidosProvider({PartidosService? service})
-      : _service = service ?? PartidosService();
+    : _service = service ?? PartidosService();
 
   List<Partido> _partidos = [];
   bool _cargando = false;
@@ -23,10 +23,12 @@ class PartidosProvider extends ChangeNotifier {
 
   List<Partido> delDia(DateTime dia) {
     return _partidos
-        .where((p) =>
-            p.fecha.year == dia.year &&
-            p.fecha.month == dia.month &&
-            p.fecha.day == dia.day)
+        .where(
+          (p) =>
+              p.fecha.year == dia.year &&
+              p.fecha.month == dia.month &&
+              p.fecha.day == dia.day,
+        )
         .toList();
   }
 
@@ -60,6 +62,13 @@ class PartidosProvider extends ChangeNotifier {
 
   Future<void> borrar(int id) async {
     await _service.borrar(id);
+    _partidos.removeWhere((p) => p.id == id);
+    notifyListeners();
+  }
+
+  // Salirse de un partido ajeno lo saca del calendario
+  Future<void> salirme(int id) async {
+    await _service.salirme(id);
     _partidos.removeWhere((p) => p.id == id);
     notifyListeners();
   }

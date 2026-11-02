@@ -19,6 +19,8 @@ class Partido {
   final int cupos;
   final String? notas;
   final List<Asistente> asistentes;
+  // Solo viene en los partidos de otros a los que me sumé
+  final String? organizador;
 
   Partido({
     this.id,
@@ -29,6 +31,7 @@ class Partido {
     required this.cupos,
     this.notas,
     this.asistentes = const [],
+    this.organizador,
   });
 
   factory Partido.fromMap(Map<String, dynamic> map) {
@@ -44,6 +47,7 @@ class Partido {
         for (final a in (map['asistentes'] as List? ?? []))
           Asistente.fromMap(a),
       ],
+      organizador: (map['anuncios'] as List?)?.firstOrNull?['autor'],
     );
   }
 
@@ -61,6 +65,7 @@ class Partido {
   // Los cupos son los que faltaban al crearlo; cada asistente ocupa uno
   int get faltan => (cupos - asistentes.length).clamp(0, cupos);
   bool get completo => faltan == 0;
+  bool esDe(String? id) => userId == id;
   bool sumado(String? userId) => asistentes.any((a) => a.userId == userId);
 
   String get hora =>

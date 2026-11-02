@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../modelos/partido.dart';
 import '../modelos/reglas_deporte.dart';
+import '../providers/partidos_provider.dart';
 import '../servicios/auth_service.dart';
 import '../servicios/partidos_service.dart';
 import '../utils/fechas.dart';
@@ -40,6 +42,7 @@ class _TarjetaPartidoFeedState extends State<TarjetaPartidoFeed> {
         await _service.sumarme(partido.id!, nombreDelUsuario());
       }
       await widget.onCambio();
+      if (mounted) await context.read<PartidosProvider>().cargar();
       messenger.showSnackBar(
         SnackBar(
           content: Text(

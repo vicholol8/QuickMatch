@@ -14,3 +14,17 @@ String haceCuanto(DateTime? fecha) {
 // "lun 3 nov · 20:00"
 String fechaCorta(DateTime fecha) =>
     DateFormat("EEE d MMM '·' HH:mm", 'es_ES').format(fecha);
+
+// Hora de un mensaje: "14:05", "Ayer 14:05" o "3 nov 14:05"
+String horaMensaje(DateTime fecha) {
+  final hoy = DateTime.now();
+  final hora = DateFormat('HH:mm').format(fecha);
+  final dias = DateTime(
+    hoy.year,
+    hoy.month,
+    hoy.day,
+  ).difference(DateTime(fecha.year, fecha.month, fecha.day)).inDays;
+  if (dias == 0) return hora;
+  if (dias == 1) return 'Ayer $hora';
+  return '${DateFormat('d MMM', 'es_ES').format(fecha)} $hora';
+}

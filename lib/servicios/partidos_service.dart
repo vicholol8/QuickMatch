@@ -9,18 +9,30 @@ class PartidosService {
 
   static const _conAsistentes = '*, asistentes(user_id, nombre)';
 
+  // Los míos más los de otros a los que me sumé (con el nombre de quien
+  // organiza, que sale del anuncio que lo publicó)
   Future<List<Partido>> listar() async {
-    final datos = await _db
-        .from('partidos')
-        .select(_conAsistentes)
-        .eq('user_id', _db.auth.currentUser!.id)
-        .order('fecha');
-    return datos.map((fila) => Partido.fromMap(fila)).toList();
+    final miId = _db.auth.currentUser!.id;
+    final (propios, sumados) = await (
+      _db.from('partidos').select(_conAsistentes).eq('user_id', miId),
+      _db
+          .from('asistentes')
+          .select('partido:partidos($_conAsistentes, anuncios(autor))')
+          .eq('user_id', miId),
+    ).wait;
+    return [
+      ...propios.map(Partido.fromMap),
+      for (final fila in sumados)
+        if (fila['partido'] != null) Partido.fromMap(fila['partido']),
+    ]..sort((a, b) => a.fecha.compareTo(b.fecha));
   }
 
   Future<Partido> crear(Partido partido) async {
-    final fila =
-        await _db.from('partidos').insert(partido.toMap()).select(_conAsistentes).single();
+    final fila = await _db
+        .from('partidos')
+        .insert(partido.toMap())
+        .select(_conAsistentes)
+        .single();
     return Partido.fromMap(fila);
   }
 

@@ -374,9 +374,11 @@ class _FormularioAnuncioState extends State<_FormularioAnuncio> {
   // Solo se pueden invitar partidos propios que todavía no se juegan
   Widget _selectorPartido() {
     final ahora = DateTime.now();
+    final miId = Supabase.instance.client.auth.currentUser?.id;
     final partidos = context
         .watch<PartidosProvider>()
         .partidos
+        .where((p) => p.esDe(miId))
         .where((p) => p.fecha.isAfter(ahora) || p.id == _partidoId)
         .toList();
 

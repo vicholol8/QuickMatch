@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:quickmatch/modelos/anuncio.dart';
 import 'package:quickmatch/modelos/deporte.dart';
+import 'package:quickmatch/modelos/mensaje.dart';
 import 'package:quickmatch/modelos/partido.dart';
 import 'package:quickmatch/modelos/reglas_deporte.dart';
 import 'package:quickmatch/providers/favoritos_provider.dart';
@@ -143,25 +144,62 @@ void main() {
     expect(p.faltan, 0);
   });
 
-  test('En un grupo la vista previa dice quién escribió', () {
-    final grupo = ResumenChat(
-      nombre: 'Pichanga',
-      esGrupo: true,
-      participantes: ['Tomás Lagos'],
-      mensajes: [const Mensaje('Tomás Lagos', 'Voy fijo', '10:00')],
+  group('Chat de partido', () {
+    Mensaje mensaje(String userId, String autor, String texto) => Mensaje(
+      partidoId: 1,
+      userId: userId,
+      autor: autor,
+      texto: texto,
+      creado: DateTime(2026, 11, 2, 10),
     );
-    expect(grupo.vistaPrevia, 'Tomás: Voy fijo');
 
-    final directo = ResumenChat(
-      nombre: 'Tomás Lagos',
-      esGrupo: false,
-      participantes: ['Tomás Lagos'],
-      mensajes: [const Mensaje('Tomás Lagos', 'Voy fijo', '10:00')],
+    test('la vista previa dice quién escribió', () {
+      expect(vistaPrevia(null, 'yo'), startsWith('Sin mensajes'));
+      expect(
+        vistaPrevia(mensaje('tomas', 'Tomás Lagos', 'Voy fijo'), 'yo'),
+        'Tomás: Voy fijo',
+      );
+      expect(vistaPrevia(mensaje('yo', 'Ana', 'Dale'), 'yo'), 'Tú: Dale');
+    });
+
+    Partido partido({
+      required String dueno,
+      List<Asistente> sumados = const [],
+    }) => Partido(
+      userId: dueno,
+      deporte: 'Fútbol 7',
+      lugar: 'Cancha',
+      fecha: DateTime(2026, 11, 3),
+      cupos: 4,
+      asistentes: sumados,
+      organizador: 'Tomás Lagos',
     );
-    expect(directo.vistaPrevia, 'Voy fijo');
 
-    directo.mensajes.add(const Mensaje(null, 'Dale', '10:01'));
-    expect(directo.vistaPrevia, 'Tú: Dale');
+    test('solo hay chat si hay alguien más en el partido', () {
+      expect(tieneChat(partido(dueno: 'yo'), 'yo'), isFalse);
+      expect(
+        tieneChat(
+          partido(
+            dueno: 'yo',
+            sumados: [Asistente(userId: 'cami', nombre: 'Camila')],
+          ),
+          'yo',
+        ),
+        isTrue,
+      );
+      expect(tieneChat(partido(dueno: 'tomas'), 'yo'), isTrue);
+    });
+
+    test('los integrantes incluyen al organizador y no a mí', () {
+      final p = partido(
+        dueno: 'tomas',
+        sumados: [
+          Asistente(userId: 'yo', nombre: 'Yo'),
+          Asistente(userId: 'cami', nombre: 'Camila Rojas'),
+        ],
+      );
+      expect(integrantes(p, 'yo'), ['Tomás Lagos', 'Camila Rojas']);
+    });
   });
 
   test('FavoritosProvider avisa a quien escucha', () {

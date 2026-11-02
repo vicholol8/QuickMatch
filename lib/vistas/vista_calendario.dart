@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../modelos/partido.dart';
 import '../modelos/reglas_deporte.dart';
 import '../providers/partidos_provider.dart';
 import '../servicios/auth_service.dart';
 import 'formulario_partido.dart';
+import 'vista_chat.dart';
 
 class VistaCalendario extends StatefulWidget {
   const VistaCalendario({super.key});
@@ -61,6 +63,46 @@ class _VistaCalendarioState extends State<VistaCalendario> {
     }
   }
 
+  Future<void> _confirmarSalida(Partido partido) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Salirme del partido'),
+        content: Text(
+          'Dejarás tu cupo libre en ${partido.deporte} y saldrás del chat del grupo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Salirme'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<PartidosProvider>().salirme(partido.id!);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Te saliste del partido')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
+    }
+  }
+
+  void _abrirChat(Partido partido) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => VistaConversacion(partido: partido)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PartidosProvider>();
@@ -110,6 +152,7 @@ class _VistaCalendarioState extends State<VistaCalendario> {
   }
 
   Widget _listaDelDia(PartidosProvider provider, List<Partido> delDia) {
+    final miId = Supabase.instance.client.auth.currentUser?.id;
     if (provider.cargando) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -143,31 +186,49 @@ class _VistaCalendarioState extends State<VistaCalendario> {
         itemCount: delDia.length,
         itemBuilder: (context, index) {
           final partido = delDia[index];
+          final esMio = partido.esDe(miId);
+          final estado = partido.completo
+              ? '¡Completo!'
+              : partido.faltan == 1
+              ? 'Falta 1 jugador'
+              : 'Faltan ${partido.faltan} jugadores';
+          final otros = integrantes(partido, miId);
+          final quienes = esMio
+              ? (otros.isEmpty ? '' : ' · se sumaron: ${otros.join(', ')}')
+              : ' · organiza ${partido.organizador ?? 'otra persona'}';
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: ListTile(
-              leading: Icon(
-                buscarModalidad(partido.deporte).$1.icono,
-                color: Colors.green,
+              leading: Badge(
+                isLabelVisible: !esMio,
+                label: const Icon(Icons.check, size: 10, color: Colors.white),
+                backgroundColor: Colors.blue,
+                child: Icon(
+                  buscarModalidad(partido.deporte).$1.icono,
+                  color: esMio ? Colors.green : Colors.blue,
+                ),
               ),
               title: Text('${partido.deporte} · ${partido.lugar}'),
               subtitle: Text(
-                '${partido.hora} hrs · '
-                '${partido.completo
-                    ? '¡Completo!'
-                    : partido.faltan == 1
-                    ? 'Falta 1 jugador'
-                    : 'Faltan ${partido.faltan} jugadores'}'
-                '${partido.asistentes.isNotEmpty ? ' · se sumaron: ${partido.asistentes.map((a) => a.nombre).join(', ')}' : ''}'
-                '${partido.notas != null ? '\n${partido.notas}' : ''}',
+                '${partido.hora} hrs · $estado$quienes\n'
+                        '${esMio ? partido.notas ?? '' : 'Te sumaste · toca para abrir el chat'}'
+                    .trim(),
               ),
-              isThreeLine: partido.notas != null,
-              onTap: () => _abrirFormulario(partido: partido),
-              trailing: IconButton(
-                tooltip: 'Borrar',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _confirmarBorrado(partido),
-              ),
+              isThreeLine: !esMio || partido.notas != null,
+              onTap: () => esMio
+                  ? _abrirFormulario(partido: partido)
+                  : _abrirChat(partido),
+              trailing: esMio
+                  ? IconButton(
+                      tooltip: 'Borrar',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _confirmarBorrado(partido),
+                    )
+                  : IconButton(
+                      tooltip: 'Salirme',
+                      icon: const Icon(Icons.logout),
+                      onPressed: () => _confirmarSalida(partido),
+                    ),
             ),
           );
         },
