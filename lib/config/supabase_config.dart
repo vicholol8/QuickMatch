@@ -5,10 +5,10 @@
 // La anon key es pública por diseño; lo que protege los datos son las políticas RLS.
 const String supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
-  defaultValue: 'TU_SUPABASE_URL',
+  defaultValue: 'https://ndovgicvgqkuztgxtxhv.supabase.co',
 );
 
 const String supabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: 'TU_SUPABASE_ANON_KEY',
+  defaultValue: 'sb_publishable_0pEpY67ESPAmf8T5gkRTEQ_O1MqAlJo',
 );
